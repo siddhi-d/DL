@@ -1,0 +1,99 @@
+import numpy as np
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense, Embedding, Lambda
+from tensorflow.keras.preprocessing.text import Tokenizer
+from tensorflow.keras.preprocessing.sequence import skipgrams
+from tensorflow.keras.utils import to_categorical
+import tensorflow.keras.backend as K
+
+# ----------------------------
+# 1️⃣ Sample text corpus
+# ----------------------------
+corpus = [
+    "deep learning models are powerful",
+    "machine learning is amazing",
+    "neural networks can learn patterns",
+    "artificial intelligence changes world"
+]
+
+# ----------------------------
+# 2️⃣ Tokenize words
+# ----------------------------
+tokenizer = Tokenizer()
+tokenizer.fit_on_texts(corpus)
+word2idx = tokenizer.word_index
+idx2word = {v: k for k, v in word2idx.items()}
+vocab_size = len(word2idx) + 1  # +1 for padding (index 0 not used)
+
+print("Vocabulary:", word2idx)
+
+# ----------------------------
+# 3️⃣ Generate (context, target) pairs for CBOW
+# ----------------------------
+window_size = 2
+pairs = []
+
+for text in corpus:
+    words = text.split()
+    for idx, word in enumerate(words):
+        start = max(0, idx - window_size)
+        end = min(len(words), idx + window_size + 1)
+        context = [words[i] for i in range(start, end) if i != idx]
+        target = word
+        pairs.append((context, target))
+
+# Convert words to indices
+X, y = [], []
+for context, target in pairs:
+    context_ids = [word2idx[w] for w in context]
+    target_id = word2idx[target]
+    X.append(context_ids)
+    y.append(target_id)
+
+# Pad/truncate context to fixed size (4 words max)
+for i in range(len(X)):
+    X[i] = (X[i] + [0]*4)[:4]  # pad to length 4
+
+X = np.array(X)
+y = np.array(y)
+
+# ----------------------------
+# 4️⃣ Build CBOW model
+# ----------------------------
+embedding_dim = 8
+
+model = Sequential([
+    Embedding(vocab_size, embedding_dim, input_length=4),
+    Lambda(lambda x: K.mean(x, axis=1)),  # average context embeddings
+    Dense(vocab_size, activation='softmax')
+])
+
+model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
+model.summary()
+
+# ----------------------------
+# 5️⃣ Train the model
+# ----------------------------
+model.fit(X, y, epochs=100, verbose=0)
+print("✅ Training Complete!\n")
+
+# ----------------------------
+# 6️⃣ User input for prediction
+# ----------------------------
+while True:
+    user_input = input("Enter context words (or type 'exit' to stop): ")
+    if user_input.lower() == "exit":
+        print("Exiting...")
+        break
+
+    context_words = user_input.strip().split()
+    context_ids = [word2idx.get(w, 0) for w in context_words]
+    context_ids = (context_ids + [0]*4)[:4]  # pad/truncate to 4
+    context_array = np.array([context_ids])
+
+    pred = model.predict(context_array)
+    pred_index = np.argmax(pred[0])
+    predicted_word = idx2word.get(pred_index, "<unknown>")
+
+    print(f"\nContext Words: {context_words}")
+    print(f"Predicted Center Word: {predicted_word}\n")
