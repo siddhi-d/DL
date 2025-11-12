@@ -1,0 +1,5 @@
+from sklearn.metrics import roc_auc_score
+
+# Suppose reconstruction errors and true labels are known
+roc_score = roc_auc_score(y_test, reconstruction_error)
+print("ROC-AUC Score:", roc_score)
